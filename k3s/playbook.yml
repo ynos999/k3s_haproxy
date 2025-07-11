@@ -1,0 +1,112 @@
+- name: Install k3s server (master1 node)
+  hosts: master1
+  become: true
+  tasks:
+    - name: Install k3s server
+      shell: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --cluster-init" sh -
+      args:
+        creates: /etc/rancher/k3s/k3s.yaml
+
+    - name: Wait for k3s server API to be ready
+      wait_for:
+        port: 6443
+        host: 127.0.0.1
+        delay: 5
+        timeout: 60
+
+    - name: Wait until node-token file exists
+      wait_for:
+        path: /var/lib/rancher/k3s/server/node-token
+        timeout: 90
+
+    - name: Get join token
+      slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: token_result
+
+    - name: Set join token globally (on localhost)
+      set_fact:
+        node_token: "{{ token_result.content | b64decode | trim }}"
+      delegate_to: localhost
+      run_once: true
+      
+    - name: Save join token to file on localhost
+      copy:
+        content: "{{ token_result.content | b64decode | trim }}"
+        dest: /tmp/k3s_node_token.txt
+      delegate_to: localhost
+      run_once: true
+    
+    - name: Restart k3s service on master1
+      systemd:
+        name: k3s
+        state: restarted
+        enabled: true
+
+
+- name: Install k3s server (master2 node)
+  hosts: master2
+  become: true
+  tasks:
+    - name: Read join token from file on localhost
+      slurp:
+        src: /tmp/k3s_node_token.txt
+      delegate_to: localhost
+      register: token_file
+      run_once: true
+
+    - name: Set join token fact on remote host
+      set_fact:
+        join_token: "{{ token_file.content | b64decode | trim }}"
+
+    - name: Install k3s server (control-plane)
+      shell: |
+        curl -sfL https://get.k3s.io | \
+          INSTALL_K3S_EXEC="server --server https://{{ master_ip }}:6443" \
+          K3S_URL=https://{{ master_ip }}:6443 \
+          K3S_TOKEN={{ join_token }} sh -
+      args:
+        creates: /etc/rancher/k3s/k3s.yaml
+    
+    - name: Restart k3s service on master2
+      systemd:
+        name: k3s
+        state: restarted
+        enabled: true
+
+- name: Install K3s agents
+  hosts: workers
+  become: true
+
+  tasks:
+    - name: Wait for master API to be ready
+      wait_for:
+        host: "{{ master_ip }}"
+        port: 6443
+        timeout: 120
+
+    - name: Read join token from file on localhost
+      slurp:
+        src: /tmp/k3s_node_token.txt
+      delegate_to: localhost
+      register: token_file
+      run_once: true
+
+    - name: Set join token fact on workers
+      set_fact:
+        join_token: "{{ token_file.content | b64decode | trim }}"
+
+    - name: Install K3s agent
+      shell: |
+        curl -sfL https://get.k3s.io | \
+          K3S_URL=https://{{ master_ip }}:6443 \
+          K3S_TOKEN={{ join_token }} sh -
+      args:
+        creates: /etc/rancher/k3s/k3s.yaml
+    
+    - name: Restart k3s-agent service on workers
+      systemd:
+        name: k3s-agent
+        state: restarted
+        enabled: true
