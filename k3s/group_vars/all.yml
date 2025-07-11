@@ -1,1 +1,1 @@
-master_ip: "192.168.4.194"   # master1 or haproxy IP address
+master_ip: "192.168.4.194"   # master1 or haproxy IP address. Change to Your IP.

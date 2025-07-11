@@ -1,7 +1,7 @@
 ### Haproxy and k3s cluster with Ansible
 ### Copy your public key (~/.ssh/id_rsa.pub) to the appropriate server's ~/.ssh/authorized_keys or use:
-#### ssh-copy-id wolf@192.168.4.196
-#### ssh-copy-id wolf@192.168.4.195
+#### ssh-copy-id YorUser@192.168.4.196
+#### ssh-copy-id YorUser@192.168.4.195
 ---
 ### Edit:
 #### sudo visudo
@@ -38,3 +38,5 @@
 #### Uninstall k3s:
 #### sudo /usr/local/bin/k3s-uninstall.sh
 #### sudo /usr/local/bin/k3s-agent-uninstall.sh
+
+#### Change to Your IP's and User, ssh key location.
